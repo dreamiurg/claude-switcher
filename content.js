@@ -127,27 +127,28 @@
 
   // Asks for the artifact the way claude.ai's artifact page does, from this page so the request is same-origin.
   // The extension swaps in another account's cookies for this one URL; "omit" keeps this page's own cookies out.
-  // A 403 "org_mismatch" names the owning organization, and the page retries with ?org=, so this does too.
-  async function frameStatus(prefix) {
-    const get = async (org) => {
-      const r = await fetch(`${prefix}${org ? `&org=${encodeURIComponent(org)}` : ""}&bk=probe`, {
-        credentials: "omit",
-        cache: "no-store",
-        headers: FRAME_HEADERS,
-      });
-      return {
-        status: r.status,
-        body: (await r.text()).slice(0, 300),
-        challenged: r.headers.get("cf-mitigated") === "challenge",
-      };
-    };
-    try {
-      const first = await get();
-      const org = first.status === 403 ? json(first.body)?.owner_org : null;
-      return typeof org === "string" ? await get(org) : first;
-    } catch (e) {
-      return { status: 0, body: String(e), challenged: false };
+  // Like the page, it names an organization (?org=), tries the account's others on 401, and on a 403
+  // "org_mismatch" retries with the owner_org the server names.
+  async function frameGet(prefix, org) {
+    const r = await fetch(`${prefix}${org ? `&org=${encodeURIComponent(org)}` : ""}&bk=probe`, {
+      credentials: "omit",
+      cache: "no-store",
+      headers: FRAME_HEADERS,
+    });
+    const body = (await r.text()).slice(0, 300);
+    return { status: r.status, body, challenged: r.headers.get("cf-mitigated") === "challenge" };
+  }
+
+  // 401: this organization can't see it, try the next. 403 org_mismatch: the server names the owner's.
+  async function frameStatus(prefix, orgs) {
+    let last = null;
+    for (const org of orgs.length ? orgs : [null]) {
+      last = await frameGet(prefix, org);
+      const owner = last.status === 403 && json(last.body)?.owner_org;
+      if (typeof owner === "string") return frameGet(prefix, owner);
+      if (last.status !== 401) break;
     }
+    return last;
   }
 
   async function probe(artifactId) {
@@ -157,7 +158,11 @@
     let r = await send({ type: "prepare", artifactId });
     if (r?.probes) {
       const results = await Promise.all(
-        r.probes.map(async (p) => ({ key: p.key, ruleId: p.ruleId, ...(await frameStatus(p.prefix)) })),
+        r.probes.map(async (p) => ({
+          key: p.key,
+          ruleId: p.ruleId,
+          ...(await frameStatus(p.prefix, p.orgs || []).catch((e) => ({ status: 0, body: String(e) }))),
+        })),
       );
       r = await send({ type: "finish", artifactId, results });
     }

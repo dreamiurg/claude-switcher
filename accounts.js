@@ -128,15 +128,20 @@ async function addCookieRule(prefix, cookies, tabId) {
 
 const removeRules = (ids) => chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: ids }).catch(() => {});
 
-// Which account a saved session belongs to, asked from the extension itself.
+// Which account a saved session belongs to and its organizations (the one it last used first), asked from
+// the extension itself.
 async function accountOf(cookies) {
   const url = `https://claude.ai/api/account?cs=${crypto.randomUUID()}`;
   const id = await addCookieRule(url, cookies, -1);
   try {
     const r = await fetch(url, { credentials: "omit", cache: "no-store" });
-    return { status: r.status, email: parseJson(await r.text())?.email_address ?? null };
+    const a = parseJson(await r.text());
+    const last = cookies.find((c) => c.name === "lastActiveOrg")?.value;
+    const orgs = (a?.memberships ?? []).map((m) => m.organization?.uuid).filter(Boolean);
+    orgs.sort((x, y) => (y === last) - (x === last));
+    return { status: r.status, email: a?.email_address ?? null, orgs };
   } catch {
-    return { status: 0, email: null };
+    return { status: 0, email: null, orgs: [] };
   } finally {
     await removeRules([id]);
   }
@@ -150,9 +155,9 @@ function parseJson(text) {
   }
 }
 
-// Step 1 of finding an artifact's account. claude.ai only accepts /api/frame from its own pages, so the
-// artifact tab's content script makes the requests; this arms one cookie-swap rule per other saved account
-// and hands back URL prefixes (never cookies).
+// Step 1 of finding an artifact's account. The artifact tab's content script makes the /api/frame requests,
+// as claude.ai's own page does; this arms one cookie-swap rule per other saved account and hands back URL
+// prefixes and each account's organizations (never cookies). /api/frame needs ?org=, like the page sends.
 export async function prepareProbe(artifactId, tabId) {
   const uuid = artifactUuid(artifactId);
   const { profiles, active, owners } = await load();
@@ -162,8 +167,9 @@ export async function prepareProbe(artifactId, tabId) {
   if (!uuid || !others.length) return { owner: null, checked: [] };
   const probes = await Promise.all(
     others.map(async (key) => {
+      const acct = await accountOf(profiles[key].cookies);
       const prefix = `https://claude.ai/api/frame/${uuid}?cs=${crypto.randomUUID()}`;
-      return { key, prefix, ruleId: await addCookieRule(prefix, profiles[key].cookies, tabId) };
+      return { key, prefix, orgs: acct.orgs, ruleId: await addCookieRule(prefix, profiles[key].cookies, tabId) };
     }),
   );
   return { probes };
