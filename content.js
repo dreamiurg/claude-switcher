@@ -15,6 +15,7 @@
     .t { flex: 1; min-width: 0; }
     .t strong { display: block; font-size: 14px; }
     .t span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .t.wrap span { white-space: normal; overflow-wrap: anywhere; }
     .t span, .em { color: #6b6862; font-weight: 400; }
     .av { flex: none; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center;
       background: #c96442; color: #fff; font-weight: 600; font-size: 12px; }
@@ -98,17 +99,20 @@
     show(el("div", "av", initials(r.owner)), t, go);
   }
 
+  function describe(d) {
+    const parts = [`artifact ${d.frame}${d.reason ? ` (${d.reason})` : ""}`];
+    if (d.challenged) parts.push("blocked by Cloudflare check");
+    parts.push(d.seenAs ? `signed in as ${d.seenAs}` : `account check ${d.account}`);
+    return `${d.name}: ${parts.join(", ")}`;
+  }
+
   function missingCard(r) {
-    const t = el("div", "t");
+    const t = el("div", "t wrap");
     t.append(el("strong", "", "Not in your other accounts"));
-    const why = (r.diagnostics || [])
-      .map((d) => `${d.name}: artifact ${d.frame}, account ${d.account}${d.seenAs ? ` as ${d.seenAs}` : ""}`)
-      .join("; ");
-    const detail = el("span", "", why ? `Checked ${why}` : `Checked ${r.checked.map((l) => l.name).join(", ")}.`);
-    detail.title = detail.textContent;
-    t.append(detail);
+    for (const d of r.diagnostics || []) t.append(el("span", "", describe(d)));
+    if (!r.diagnostics?.length) t.append(el("span", "", `Checked ${r.checked.map((l) => l.name).join(", ")}.`));
     show(t);
-    setTimeout(hide, 15000);
+    setTimeout(hide, 20000);
   }
 
   async function probe(artifactId) {

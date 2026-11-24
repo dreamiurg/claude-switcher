@@ -107,7 +107,7 @@ let nextRuleId = Math.floor(Math.random() * 1e6) + 1;
 // Requests a claude.ai API path with another account's session. A one-off DNR rule swaps the Cookie header on
 // this one extension request only (marked URL, no tab); credentials: "omit" keeps the response's Set-Cookie out
 // of the browser's cookie jar, so the signed-in account is untouched.
-async function requestAs(path, cookies) {
+async function requestAs(path, cookies, headers = {}) {
   const id = nextRuleId++;
   const url = `https://claude.ai${path}${path.includes("?") ? "&" : "?"}cs=${crypto.randomUUID()}`;
   await chrome.declarativeNetRequest.updateSessionRules({
@@ -124,9 +124,9 @@ async function requestAs(path, cookies) {
     ],
   });
   try {
-    const r = await fetch(url, { credentials: "omit" });
+    const r = await fetch(url, { credentials: "omit", cache: "no-store", headers });
     const body = await r.text().catch(() => "");
-    return { status: r.status, body };
+    return { status: r.status, body, challenged: r.headers.get("cf-mitigated") === "challenge" };
   } catch (e) {
     return { status: 0, body: String(e) };
   } finally {
@@ -138,13 +138,37 @@ async function requestAs(path, cookies) {
 // asks claude.ai which account the swapped session belongs to.
 async function diagnose(key, profile, frame) {
   const acct = await requestAs("/api/account", profile.cookies);
-  let seenAs = null;
-  try {
-    seenAs = JSON.parse(acct.body).email_address ?? null;
-  } catch {}
-  const d = { key, frame: frame.status, account: acct.status, seenAs, frameBody: frame.body.slice(0, 200) };
-  console.warn("Claude Switcher probe", d);
+  const d = {
+    key,
+    frame: frame.status,
+    challenged: frame.challenged,
+    reason: parseJson(frame.body)?.reason ?? parseJson(frame.body)?.error?.type ?? null,
+    account: acct.status,
+    seenAs: parseJson(acct.body)?.email_address ?? null,
+  };
+  console.warn("Claude Switcher probe", d, frame.body.slice(0, 300));
   return d;
+}
+
+// Headers claude.ai's own artifact page sends with /api/frame requests.
+const FRAME_HEADERS = { "X-Frame-CP": "go", "X-Frame-Platform": "web" };
+
+function parseJson(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+// Asks for the artifact the way the artifact page does. A 403 "org_mismatch" names the owning organization;
+// the page then retries with ?org=, and so does this.
+async function frameAs(uuid, cookies) {
+  const path = (org) => `/api/frame/${uuid}?${org ? `org=${encodeURIComponent(org)}&` : ""}bk=probe`;
+  const first = await requestAs(path(), cookies, FRAME_HEADERS);
+  const ownerOrg = first.status === 403 ? parseJson(first.body)?.owner_org : null;
+  if (typeof ownerOrg !== "string") return first;
+  return requestAs(path(ownerOrg), cookies, FRAME_HEADERS);
 }
 
 // Which saved account (other than the active one) can open this artifact.
@@ -156,12 +180,7 @@ export async function findOwner(artifactId) {
   const others = Object.keys(profiles).filter((k) => k !== active);
   if (!uuid || !others.length) return { owner: null, checked: [] };
 
-  const frames = await Promise.all(
-    others.map(async (k) => [
-      k,
-      await requestAs(`/api/frame/${uuid}?via=user_open&bk=initial&actor=id&vt=1&rw=1`, profiles[k].cookies),
-    ]),
-  );
+  const frames = await Promise.all(others.map(async (k) => [k, await frameAs(uuid, profiles[k].cookies)]));
   const results = frames.map(([k, f]) => [k, f.status]);
   const owner = results.find(([, s]) => s === 200)?.[0] ?? null;
   const nowExpired = results.filter(([, s]) => s === 401).map(([k]) => k);

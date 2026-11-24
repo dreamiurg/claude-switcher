@@ -15,12 +15,7 @@ async function probe(artifactId, tabId) {
     active: active ? label(profiles, active) : null,
     checked: checked.map((k) => label(profiles, k)),
     showEmails,
-    diagnostics: diagnostics.map(({ key, frame, account, seenAs }) => ({
-      name: label(profiles, key).name,
-      frame,
-      account,
-      seenAs,
-    })),
+    diagnostics: diagnostics.map(({ key, ...d }) => ({ ...d, name: label(profiles, key).name })),
   };
 }
 
