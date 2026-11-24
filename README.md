@@ -19,11 +19,11 @@ It remembers each account's claude.ai session cookies and swaps them in when you
 2. Click **Add another account**, sign in to the next account, open the extension again.
 3. From now on, click an account to switch to it.
 
+Don't use claude.ai's **Log out** on a saved account. It ends that session on Anthropic's side and you'll have to sign in again. Use **Add another account** instead.
+
 ## Update
 
 The popup shows your version and tells you when a newer one is out. To update, run `git pull` in the extension's folder (or download the ZIP again), then click the reload icon on the extension in `chrome://extensions`.
-
-Don't use claude.ai's **Log out** on a saved account. It ends that session on Anthropic's side and you'll have to sign in again. Use **Add another account** instead.
 
 ## Good to know
 
