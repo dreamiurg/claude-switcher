@@ -171,7 +171,7 @@
 
   const blocked = () =>
     /^(Page not found|Sign in)/.test(document.title) ||
-    /Page not found|Sign in to view this page/.test(document.body?.innerText || "");
+    /Page not found|Sign in to view this page/.test(document.body?.textContent || "");
 
   // claude.ai is a single-page app: watch for route changes, then give each artifact page a few seconds to settle.
   function onRoute() {
