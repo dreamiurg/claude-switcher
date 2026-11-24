@@ -101,15 +101,14 @@
   function missingCard(r) {
     const t = el("div", "t");
     t.append(el("strong", "", "Not in your other accounts"));
-    t.append(
-      el(
-        "span",
-        "",
-        `Checked ${r.checked.map((l) => l.name).join(", ")}. The link may be wrong, or it isn't shared with you.`,
-      ),
-    );
+    const why = (r.diagnostics || [])
+      .map((d) => `${d.name}: artifact ${d.frame}, account ${d.account}${d.seenAs ? ` as ${d.seenAs}` : ""}`)
+      .join("; ");
+    const detail = el("span", "", why ? `Checked ${why}` : `Checked ${r.checked.map((l) => l.name).join(", ")}.`);
+    detail.title = detail.textContent;
+    t.append(detail);
     show(t);
-    setTimeout(hide, 6000);
+    setTimeout(hide, 15000);
   }
 
   async function probe(artifactId) {

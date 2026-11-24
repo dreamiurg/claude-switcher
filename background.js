@@ -3,7 +3,7 @@ import { findOwner, label, load, remember, switchTo } from "./accounts.js";
 const initials = (l) => (l.name.match(/\b\p{L}/gu) || [l.name[0] || "?"]).slice(0, 2).join("").toUpperCase();
 
 async function probe(artifactId, tabId) {
-  const { owner, checked } = await findOwner(artifactId);
+  const { owner, checked, diagnostics = [] } = await findOwner(artifactId);
   const { profiles, active, showEmails } = await load();
   const ownerLabel = owner ? label(profiles, owner) : null;
   if (tabId !== undefined) {
@@ -15,6 +15,12 @@ async function probe(artifactId, tabId) {
     active: active ? label(profiles, active) : null,
     checked: checked.map((k) => label(profiles, k)),
     showEmails,
+    diagnostics: diagnostics.map(({ key, frame, account, seenAs }) => ({
+      name: label(profiles, key).name,
+      frame,
+      account,
+      seenAs,
+    })),
   };
 }
 
