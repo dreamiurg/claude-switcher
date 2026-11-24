@@ -125,7 +125,7 @@ async function suggest() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const artifactId = artifactIdFromUrl(tab?.url);
   if (!artifactId || !/^(Page not found|Sign in)/.test(tab.title || "")) return;
-  const r = await send({ type: "probe", artifactId });
+  const r = await send({ type: "cached", artifactId });
   if (!r?.owner) return;
   const { profiles } = await load();
   const p = profiles[r.owner.key];

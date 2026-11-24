@@ -1,9 +1,9 @@
-import { findOwner, label, load, remember, switchTo } from "./accounts.js";
+import { cachedOwner, finishProbe, label, load, prepareProbe, remember, switchTo } from "./accounts.js";
 
 const initials = (l) => (l.name.match(/\b\p{L}/gu) || [l.name[0] || "?"]).slice(0, 2).join("").toUpperCase();
 
-async function probe(artifactId, tabId) {
-  const { owner, checked, diagnostics = [] } = await findOwner(artifactId);
+// What the page and popup may see: names and emails, never cookies.
+async function present({ owner, checked = [], diagnostics = [] }, tabId) {
   const { profiles, active, showEmails } = await load();
   const ownerLabel = owner ? label(profiles, owner) : null;
   if (tabId !== undefined) {
@@ -20,14 +20,28 @@ async function probe(artifactId, tabId) {
 }
 
 async function handle(msg, sender) {
-  if (msg.type === "probe") return probe(msg.artifactId, sender.tab?.id);
-  if (msg.type === "seen") {
-    const { active } = await load();
-    if (active) await remember(msg.artifactId, active);
-    return {};
+  const tabId = sender.tab?.id;
+  switch (msg.type) {
+    case "prepare": {
+      const r = await prepareProbe(msg.artifactId, tabId);
+      return r.probes ? { probes: r.probes } : present(r, tabId);
+    }
+    case "finish":
+      return present(await finishProbe(msg.artifactId, msg.results), tabId);
+    case "cached": {
+      const owner = await cachedOwner(msg.artifactId);
+      return present({ owner, checked: owner ? [owner] : [] });
+    }
+    case "seen": {
+      const { active } = await load();
+      if (active) await remember(msg.artifactId, active);
+      return {};
+    }
+    case "switch":
+      return { failed: await switchTo(msg.key) };
+    default:
+      throw new Error(`Unknown message ${msg.type}`);
   }
-  if (msg.type === "switch") return { failed: await switchTo(msg.key) };
-  throw new Error(`Unknown message ${msg.type}`);
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {

@@ -104,12 +104,11 @@ export async function remember(artifactId, key) {
 
 let nextRuleId = Math.floor(Math.random() * 1e6) + 1;
 
-// Requests a claude.ai API path with another account's session. A one-off DNR rule swaps the Cookie header on
-// this one extension request only (marked URL, no tab); credentials: "omit" keeps the response's Set-Cookie out
-// of the browser's cookie jar, so the signed-in account is untouched.
-async function requestAs(path, cookies, headers = {}) {
+// A one-off DNR rule that swaps the Cookie header for requests whose URL starts with `prefix` (it carries a
+// random nonce), only from the given tab (-1: the extension itself). Requests made with credentials: "omit"
+// also keep the response's Set-Cookie out of the cookie jar, so the signed-in account is untouched.
+async function addCookieRule(prefix, cookies, tabId) {
   const id = nextRuleId++;
-  const url = `https://claude.ai${path}${path.includes("?") ? "&" : "?"}cs=${crypto.randomUUID()}`;
   await chrome.declarativeNetRequest.updateSessionRules({
     addRules: [
       {
@@ -119,39 +118,29 @@ async function requestAs(path, cookies, headers = {}) {
           type: "modifyHeaders",
           requestHeaders: [{ header: "cookie", operation: "set", value: cookieHeader(cookies) }],
         },
-        condition: { urlFilter: `|${url}|`, tabIds: [-1], resourceTypes: ["xmlhttprequest", "other"] },
+        condition: { urlFilter: `|${prefix}`, tabIds: [tabId], resourceTypes: ["xmlhttprequest", "other"] },
       },
     ],
   });
+  setTimeout(() => removeRules([id]), 20000);
+  return id;
+}
+
+const removeRules = (ids) => chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: ids }).catch(() => {});
+
+// Which account a saved session belongs to, asked from the extension itself.
+async function accountOf(cookies) {
+  const url = `https://claude.ai/api/account?cs=${crypto.randomUUID()}`;
+  const id = await addCookieRule(url, cookies, -1);
   try {
-    const r = await fetch(url, { credentials: "omit", cache: "no-store", headers });
-    const body = await r.text().catch(() => "");
-    return { status: r.status, body, challenged: r.headers.get("cf-mitigated") === "challenge" };
-  } catch (e) {
-    return { status: 0, body: String(e) };
+    const r = await fetch(url, { credentials: "omit", cache: "no-store" });
+    return { status: r.status, email: parseJson(await r.text())?.email_address ?? null };
+  } catch {
+    return { status: 0, email: null };
   } finally {
-    await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: [id] });
+    await removeRules([id]);
   }
 }
-
-// When no account can open an artifact, tells apart "not theirs" from "the cookie swap didn't work":
-// asks claude.ai which account the swapped session belongs to.
-async function diagnose(key, profile, frame) {
-  const acct = await requestAs("/api/account", profile.cookies);
-  const d = {
-    key,
-    frame: frame.status,
-    challenged: frame.challenged,
-    reason: parseJson(frame.body)?.reason ?? parseJson(frame.body)?.error?.type ?? null,
-    account: acct.status,
-    seenAs: parseJson(acct.body)?.email_address ?? null,
-  };
-  console.warn("Claude Switcher probe", d, frame.body.slice(0, 300));
-  return d;
-}
-
-// Headers claude.ai's own artifact page sends with /api/frame requests.
-const FRAME_HEADERS = { "X-Frame-CP": "go", "X-Frame-Platform": "web" };
 
 function parseJson(text) {
   try {
@@ -161,35 +150,60 @@ function parseJson(text) {
   }
 }
 
-// Asks for the artifact the way the artifact page does. A 403 "org_mismatch" names the owning organization;
-// the page then retries with ?org=, and so does this.
-async function frameAs(uuid, cookies) {
-  const path = (org) => `/api/frame/${uuid}?${org ? `org=${encodeURIComponent(org)}&` : ""}bk=probe`;
-  const first = await requestAs(path(), cookies, FRAME_HEADERS);
-  const ownerOrg = first.status === 403 ? parseJson(first.body)?.owner_org : null;
-  if (typeof ownerOrg !== "string") return first;
-  return requestAs(path(ownerOrg), cookies, FRAME_HEADERS);
-}
-
-// Which saved account (other than the active one) can open this artifact.
-export async function findOwner(artifactId) {
+// Step 1 of finding an artifact's account. claude.ai only accepts /api/frame from its own pages, so the
+// artifact tab's content script makes the requests; this arms one cookie-swap rule per other saved account
+// and hands back URL prefixes (never cookies).
+export async function prepareProbe(artifactId, tabId) {
   const uuid = artifactUuid(artifactId);
-  const { profiles, active, owners, expired } = await load();
+  const { profiles, active, owners } = await load();
   const cached = owners[artifactId];
   if (cached && cached !== active && profiles[cached]) return { owner: cached, checked: [cached] };
   const others = Object.keys(profiles).filter((k) => k !== active);
   if (!uuid || !others.length) return { owner: null, checked: [] };
+  const probes = await Promise.all(
+    others.map(async (key) => {
+      const prefix = `https://claude.ai/api/frame/${uuid}?cs=${crypto.randomUUID()}`;
+      return { key, prefix, ruleId: await addCookieRule(prefix, profiles[key].cookies, tabId) };
+    }),
+  );
+  return { probes };
+}
 
-  const frames = await Promise.all(others.map(async (k) => [k, await frameAs(uuid, profiles[k].cookies)]));
-  const results = frames.map(([k, f]) => [k, f.status]);
-  const owner = results.find(([, s]) => s === 200)?.[0] ?? null;
-  const nowExpired = results.filter(([, s]) => s === 401).map(([k]) => k);
-  const stillOk = results.filter(([, s]) => s !== 401).map(([k]) => k);
+// Step 2: the content script's results. 200 means that account can open the artifact.
+export async function finishProbe(artifactId, results) {
+  await removeRules(results.map((r) => r.ruleId));
+  const { profiles, expired } = await load();
+  const known = results.filter((r) => profiles[r.key]);
+  const owner = known.find((r) => r.status === 200)?.key ?? null;
+  if (owner) {
+    await remember(artifactId, owner);
+    return { owner, checked: known.map((r) => r.key), diagnostics: [] };
+  }
+  const diagnostics = await Promise.all(
+    known.map(async (r) => {
+      const acct = await accountOf(profiles[r.key].cookies);
+      const d = {
+        key: r.key,
+        frame: r.status,
+        challenged: r.challenged,
+        reason: parseJson(r.body)?.reason ?? parseJson(r.body)?.error?.type ?? null,
+        account: acct.status,
+        seenAs: acct.email,
+      };
+      console.warn("Claude Switcher probe", d, r.body);
+      return d;
+    }),
+  );
+  const nowExpired = diagnostics.filter((d) => d.account === 401).map((d) => d.key);
+  const fine = diagnostics.filter((d) => d.account === 200).map((d) => d.key);
   await chrome.storage.local.set({
-    expired: [...new Set([...expired.filter((k) => !stillOk.includes(k)), ...nowExpired])],
+    expired: [...new Set([...expired.filter((k) => !fine.includes(k)), ...nowExpired])],
   });
-  if (owner) await remember(artifactId, owner);
-  const diagnostics = owner ? [] : await Promise.all(frames.map(([k, f]) => diagnose(k, profiles[k], f)));
-  await chrome.storage.local.set({ lastProbe: { artifactId, at: Date.now(), diagnostics } });
-  return { owner, checked: others, diagnostics };
+  return { owner: null, checked: known.map((r) => r.key), diagnostics };
+}
+
+export async function cachedOwner(artifactId) {
+  const { profiles, active, owners } = await load();
+  const k = owners[artifactId];
+  return k && k !== active && profiles[k] ? k : null;
 }

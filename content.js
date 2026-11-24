@@ -115,13 +115,54 @@
     setTimeout(hide, 20000);
   }
 
+  const FRAME_HEADERS = { "X-Frame-CP": "go", "X-Frame-Platform": "web" };
+
+  const json = (text) => {
+    try {
+      return JSON.parse(text);
+    } catch {
+      return null;
+    }
+  };
+
+  // Asks for the artifact the way claude.ai's artifact page does, from this page so the request is same-origin.
+  // The extension swaps in another account's cookies for this one URL; "omit" keeps this page's own cookies out.
+  // A 403 "org_mismatch" names the owning organization, and the page retries with ?org=, so this does too.
+  async function frameStatus(prefix) {
+    const get = async (org) => {
+      const r = await fetch(`${prefix}${org ? `&org=${encodeURIComponent(org)}` : ""}&bk=probe`, {
+        credentials: "omit",
+        cache: "no-store",
+        headers: FRAME_HEADERS,
+      });
+      return {
+        status: r.status,
+        body: (await r.text()).slice(0, 300),
+        challenged: r.headers.get("cf-mitigated") === "challenge",
+      };
+    };
+    try {
+      const first = await get();
+      const org = first.status === 403 ? json(first.body)?.owner_org : null;
+      return typeof org === "string" ? await get(org) : first;
+    } catch (e) {
+      return { status: 0, body: String(e), challenged: false };
+    }
+  }
+
   async function probe(artifactId) {
     const t = el("div", "t");
     t.append(el("strong", "", "Checking your other accounts…"));
     show(el("div", "spin"), t);
-    const r = await send({ type: "probe", artifactId });
+    let r = await send({ type: "prepare", artifactId });
+    if (r?.probes) {
+      const results = await Promise.all(
+        r.probes.map(async (p) => ({ key: p.key, ruleId: p.ruleId, ...(await frameStatus(p.prefix)) })),
+      );
+      r = await send({ type: "finish", artifactId, results });
+    }
     if (location.pathname !== seenPath) return;
-    if (!r || r.error || !r.checked.length) return hide();
+    if (!r || r.error || !r.checked?.length) return hide();
     if (r.owner) foundCard(r);
     else missingCard(r);
   }
