@@ -14,8 +14,7 @@
     @media (prefers-reduced-motion: reduce) { .card, .spin { animation: none; } }
     .t { flex: 1; min-width: 0; }
     .t strong { display: block; font-size: 14px; }
-    .t span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .t.wrap span { white-space: normal; overflow-wrap: anywhere; }
+    .t span { display: block; overflow-wrap: anywhere; }
     .t span, .em { color: #6b6862; font-weight: 400; }
     .av { flex: none; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center;
       background: #c96442; color: #fff; font-weight: 600; font-size: 12px; }
@@ -81,10 +80,8 @@
   function foundCard(r) {
     const t = el("div", "t");
     t.append(el("strong", "", `This artifact is in ${r.owner.name}`));
-    const sub = el("span");
-    if (r.showEmails && r.owner.email && r.owner.email !== r.owner.name) sub.append(r.owner.email);
-    if (r.active) sub.append(sub.textContent ? " · " : "", `you're on ${r.active.name}`);
-    if (sub.textContent) t.append(sub);
+    if (r.showEmails && r.owner.email && r.owner.email !== r.owner.name) t.append(el("span", "", r.owner.email));
+    if (r.active) t.append(el("span", "", `You're on ${r.active.name}`));
     const go = el("button", "go", "Open there");
     go.type = "button";
     go.onclick = async () => {
@@ -107,7 +104,7 @@
   }
 
   function missingCard(r) {
-    const t = el("div", "t wrap");
+    const t = el("div", "t");
     t.append(el("strong", "", "Not in your other accounts"));
     for (const d of r.diagnostics || []) t.append(el("span", "", describe(d)));
     if (!r.diagnostics?.length) t.append(el("span", "", `Checked ${r.checked.map((l) => l.name).join(", ")}.`));
