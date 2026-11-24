@@ -113,6 +113,18 @@
     #status { margin: 0; padding: 0 16px 12px; color: var(--muted); font-size: 12px; min-height: 0; }
     #status:empty { display: none; }
     #status.error { color: var(--danger); }
+    #suggest { margin: 0 8px 8px; padding: 10px; border-radius: 10px; background: var(--clay-soft); }
+    #suggest p { margin: 0 0 8px; color: var(--clay-ink); font-size: 12px; font-weight: 600; }
+    #suggest .row { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 8px; background: var(--surface); }
+    .go { flex: none; border: 0; border-radius: 8px; padding: 6px 12px; background: var(--clay); color: #fff;
+      font: 600 12px/1.2 inherit; font-family: inherit; cursor: pointer; }
+    .go:disabled { opacity: 0.7; cursor: default; }
+    .expired { flex: none; color: var(--clay-ink); font-size: 11px; font-weight: 600; }
+    .prefs { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 0; color: var(--muted); font-size: 12px; }
+    .prefs label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+    .prefs input { accent-color: var(--clay); margin: 0; }
+    #update { color: var(--clay-ink); font-weight: 600; }
+    body.hide-emails .email { display: none; }
 
     :focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
     button:focus:not(:focus-visible) { outline: none; }
@@ -124,6 +136,7 @@
     <h1>Claude accounts</h1>
     <p id="sub">Pick an account to switch this Chrome profile to it.</p>
   </header>
+  <div id="suggest" hidden><p>This page is in another account</p><div class="row" id="suggest-row"></div></div>
   <ul id="list"></ul>
   <footer>
     <button type="button" class="add" id="fresh">
@@ -132,6 +145,10 @@
       </span>
       <span>Add another account<small>Signs out here only. Saved accounts keep working.</small></span>
     </button>
+    <div class="prefs">
+      <label><input type="checkbox" id="show-emails"> Show emails</label>
+      <span id="version"></span>
+    </div>
   </footer>
   <p id="status" role="status"></p>
   <script type="module" src="popup.js"></script>
