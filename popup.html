@@ -1,5 +1,5 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="color-scheme" content="light dark">
@@ -17,6 +17,7 @@
       --danger: #b3412e;
       --focus: #c96442;
       --shadow: 0 1px 2px rgb(31 30 29 / 6%), 0 4px 12px rgb(31 30 29 / 5%);
+      --dur: 160ms;
     }
     @media (prefers-color-scheme: dark) {
       :root {
@@ -57,7 +58,7 @@
       display: flex; align-items: center; gap: 10px;
       width: 100%; padding: 8px; border: 0; border-radius: 10px;
       background: transparent; color: inherit; font: inherit; text-align: left;
-      cursor: pointer; transition: background-color 160ms cubic-bezier(.2,.8,.2,1);
+      cursor: pointer; transition: background-color var(--dur) cubic-bezier(.2,.8,.2,1);
     }
     .account:hover:not(:disabled) { background: var(--hover); }
     .account:disabled { cursor: default; }
@@ -77,21 +78,21 @@
       background: var(--clay-soft); color: var(--clay-ink); font-size: 11px; font-weight: 600;
     }
     .badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--clay); }
-    .hint { flex: none; color: var(--muted); font-size: 12px; opacity: 0; transition: opacity 160ms; }
-    .account:hover .hint, .account:focus-visible .hint { opacity: 1; }
+    .hint { flex: none; color: var(--muted); font-size: 12px; opacity: 0; transition: opacity var(--dur); }
+    li:hover .hint, li.busy .hint { opacity: 1; }
+    li.busy .hint { color: var(--clay-ink); }
+    .account:focus-visible .hint { opacity: 1; }
     li:not(.current) .account { padding-right: 40px; }
-    li.busy .hint { opacity: 1; color: var(--clay-ink); }
 
     .remove {
       position: absolute; right: 8px; top: 50%; translate: 0 -50%;
       display: grid; place-items: center; width: 28px; height: 28px;
       border: 0; border-radius: 8px; background: transparent; color: var(--muted);
-      cursor: pointer; opacity: 0; transition: opacity 160ms, background-color 160ms, color 160ms;
+      cursor: pointer; opacity: 0; transition: opacity var(--dur), background-color var(--dur), color var(--dur);
     }
     li:hover .remove, .remove:focus-visible { opacity: 1; }
     .remove:hover { background: var(--clay-soft); color: var(--danger); }
     li.current .remove { display: none; }
-    li:hover .hint { opacity: 1; }
 
     .empty { padding: 8px 8px 4px; color: var(--muted); }
 
@@ -100,7 +101,7 @@
       display: flex; align-items: center; gap: 10px; width: 100%;
       padding: 8px; border: 0; border-radius: 10px; background: transparent;
       color: var(--ink); font: inherit; font-weight: 500; text-align: left; cursor: pointer;
-      transition: background-color 160ms;
+      transition: background-color var(--dur);
     }
     .add:hover { background: var(--hover); }
     .add .plus {
@@ -115,7 +116,7 @@
 
     :focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
     button:focus:not(:focus-visible) { outline: none; }
-    @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+    @media (prefers-reduced-motion: reduce) { :root { --dur: 0ms; } }
   </style>
 </head>
 <body>
@@ -125,9 +126,9 @@
   </header>
   <ul id="list"></ul>
   <footer>
-    <button class="add" id="fresh">
+    <button type="button" class="add" id="fresh">
       <span class="plus" aria-hidden="true">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M7 2v10M2 7h10"/></svg>
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M7 2v10M2 7h10"/></svg>
       </span>
       <span>Add another account<small>Signs out here only. Saved accounts keep working.</small></span>
     </button>

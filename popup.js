@@ -106,6 +106,7 @@ function accountRow(key, p, isCurrent, rerender) {
   const li = el("li", isCurrent ? "current" : "");
 
   const btn = el("button", "account");
+  btn.type = "button";
   btn.disabled = isCurrent;
   btn.setAttribute("aria-label", isCurrent ? `${label}, current account` : `Switch to ${label}`);
 
@@ -125,6 +126,7 @@ function accountRow(key, p, isCurrent, rerender) {
 
   if (!isCurrent) {
     const del = el("button", "remove");
+    del.type = "button";
     del.innerHTML = TRASH;
     del.title = "Forget this account";
     del.setAttribute("aria-label", `Forget ${label}`);
