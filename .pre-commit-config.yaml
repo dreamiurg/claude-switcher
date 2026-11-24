@@ -1,0 +1,30 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: detect-private-key
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.0
+    hooks:
+      - id: gitleaks
+
+  - repo: local
+    hooks:
+      - id: biome-check
+        name: biome check
+        entry: npx biome check --write --no-errors-on-unmatched
+        language: system
+        types_or: [javascript, json]
+      - id: test
+        name: tests
+        entry: npm test
+        language: system
+        pass_filenames: false
+        stages: [pre-push]

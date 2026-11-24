@@ -1,0 +1,138 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="color-scheme" content="light dark">
+  <style>
+    :root {
+      --bg: #faf9f5;
+      --surface: #ffffff;
+      --ink: #1f1e1d;
+      --muted: #6b6862;
+      --line: #e8e5dc;
+      --hover: #f2efe6;
+      --clay: #c96442;
+      --clay-ink: #a84f33;
+      --clay-soft: #f6e6dd;
+      --danger: #b3412e;
+      --focus: #c96442;
+      --shadow: 0 1px 2px rgb(31 30 29 / 6%), 0 4px 12px rgb(31 30 29 / 5%);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #262624;
+        --surface: #30302e;
+        --ink: #f0eee6;
+        --muted: #a6a39b;
+        --line: #3d3c39;
+        --hover: #383835;
+        --clay: #d97757;
+        --clay-ink: #e8957a;
+        --clay-soft: #43312a;
+        --danger: #e07a66;
+        --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 4px 12px rgb(0 0 0 / 20%);
+      }
+    }
+    * { box-sizing: border-box; }
+    ::selection { background: var(--clay-soft); color: var(--ink); }
+    body {
+      margin: 0;
+      width: 320px;
+      background: var(--bg);
+      color: var(--ink);
+      font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    header { padding: 16px 16px 10px; }
+    h1 {
+      margin: 0;
+      font: 500 17px/1.2 ui-serif, "Iowan Old Style", Georgia, serif;
+      letter-spacing: -0.01em;
+    }
+    header p { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
+
+    ul { list-style: none; margin: 0; padding: 0 8px; }
+    li { position: relative; }
+    .account {
+      display: flex; align-items: center; gap: 10px;
+      width: 100%; padding: 8px; border: 0; border-radius: 10px;
+      background: transparent; color: inherit; font: inherit; text-align: left;
+      cursor: pointer; transition: background-color 160ms cubic-bezier(.2,.8,.2,1);
+    }
+    .account:hover:not(:disabled) { background: var(--hover); }
+    .account:disabled { cursor: default; }
+    li.current .account { background: var(--surface); box-shadow: var(--shadow); }
+    .avatar {
+      flex: none; display: grid; place-items: center;
+      width: 32px; height: 32px; border-radius: 50%;
+      font-weight: 600; font-size: 12px; letter-spacing: 0.02em; color: #fff;
+    }
+    .who { flex: 1; min-width: 0; }
+    .name, .email { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .name { font-weight: 600; font-size: 13px; }
+    .email { color: var(--muted); font-size: 12px; }
+    .badge {
+      flex: none; display: inline-flex; align-items: center; gap: 5px;
+      padding: 2px 8px; border-radius: 999px;
+      background: var(--clay-soft); color: var(--clay-ink); font-size: 11px; font-weight: 600;
+    }
+    .badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--clay); }
+    .hint { flex: none; color: var(--muted); font-size: 12px; opacity: 0; transition: opacity 160ms; }
+    .account:hover .hint, .account:focus-visible .hint { opacity: 1; }
+    li:not(.current) .account { padding-right: 40px; }
+    li.busy .hint { opacity: 1; color: var(--clay-ink); }
+
+    .remove {
+      position: absolute; right: 8px; top: 50%; translate: 0 -50%;
+      display: grid; place-items: center; width: 28px; height: 28px;
+      border: 0; border-radius: 8px; background: transparent; color: var(--muted);
+      cursor: pointer; opacity: 0; transition: opacity 160ms, background-color 160ms, color 160ms;
+    }
+    li:hover .remove, .remove:focus-visible { opacity: 1; }
+    .remove:hover { background: var(--clay-soft); color: var(--danger); }
+    li.current .remove { display: none; }
+    li:hover .hint { opacity: 1; }
+
+    .empty { padding: 8px 8px 4px; color: var(--muted); }
+
+    footer { margin-top: 8px; padding: 8px; border-top: 1px solid var(--line); }
+    .add {
+      display: flex; align-items: center; gap: 10px; width: 100%;
+      padding: 8px; border: 0; border-radius: 10px; background: transparent;
+      color: var(--ink); font: inherit; font-weight: 500; text-align: left; cursor: pointer;
+      transition: background-color 160ms;
+    }
+    .add:hover { background: var(--hover); }
+    .add .plus {
+      display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%;
+      border: 1px dashed var(--muted); color: var(--muted);
+    }
+    .add small { display: block; color: var(--muted); font-weight: 400; font-size: 12px; }
+
+    #status { margin: 0; padding: 0 16px 12px; color: var(--muted); font-size: 12px; min-height: 0; }
+    #status:empty { display: none; }
+    #status.error { color: var(--danger); }
+
+    :focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+    button:focus:not(:focus-visible) { outline: none; }
+    @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Claude accounts</h1>
+    <p id="sub">Pick an account to switch this Chrome profile to it.</p>
+  </header>
+  <ul id="list"></ul>
+  <footer>
+    <button class="add" id="fresh">
+      <span class="plus" aria-hidden="true">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M7 2v10M2 7h10"/></svg>
+      </span>
+      <span>Add another account<small>Signs out here only. Saved accounts keep working.</small></span>
+    </button>
+  </footer>
+  <p id="status" role="status"></p>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
