@@ -169,15 +169,21 @@ export async function prepareProbe(artifactId, tabId) {
     others.map(async (key) => {
       const acct = await accountOf(profiles[key].cookies);
       const prefix = `https://claude.ai/api/frame/${uuid}?cs=${crypto.randomUUID()}`;
-      return { key, prefix, orgs: acct.orgs, ruleId: await addCookieRule(prefix, profiles[key].cookies, tabId) };
+      // The page asks this when the artifact won't open, to offer "View invitation" for one shared with you.
+      const invitePrefix = `https://claude.ai/api/frame/invitation/by-artifact/${uuid}?cs=${crypto.randomUUID()}`;
+      const ruleIds = await Promise.all(
+        [prefix, invitePrefix].map((u) => addCookieRule(u, profiles[key].cookies, tabId)),
+      );
+      return { key, prefix, invitePrefix, orgs: acct.orgs, ruleIds };
     }),
   );
   return { probes };
 }
 
-// Step 2: the content script's results. 200 means that account can open the artifact.
+// Step 2: the content script's results. 200 means that account can open the artifact; failing that, an
+// account with a pending invitation to it is the one to switch to.
 export async function finishProbe(artifactId, results) {
-  await removeRules(results.map((r) => r.ruleId));
+  await removeRules(results.flatMap((r) => r.ruleIds ?? []));
   const { profiles, expired } = await load();
   const known = results.filter((r) => profiles[r.key]);
   const owner = known.find((r) => r.status === 200)?.key ?? null;
@@ -185,6 +191,9 @@ export async function finishProbe(artifactId, results) {
     await remember(artifactId, owner);
     return { owner, checked: known.map((r) => r.key), diagnostics: [] };
   }
+  // Not cached: once accepted, the artifact opens there and the next visit caches it as usual.
+  const invitee = known.find((r) => r.invited)?.key;
+  if (invitee) return { owner: invitee, invited: true, checked: known.map((r) => r.key), diagnostics: [] };
   const diagnostics = await Promise.all(
     known.map(async (r) => {
       const acct = await accountOf(profiles[r.key].cookies);

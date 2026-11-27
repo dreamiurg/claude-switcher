@@ -3,7 +3,7 @@ import { cachedOwner, finishProbe, label, load, prepareProbe, remember, switchTo
 const initials = (l) => (l.name.match(/\b\p{L}/gu) || [l.name[0] || "?"]).slice(0, 2).join("").toUpperCase();
 
 // What the page and popup may see: names and emails, never cookies.
-async function present({ owner, checked = [], diagnostics = [] }, tabId) {
+async function present({ owner, invited = false, checked = [], diagnostics = [] }, tabId) {
   const { profiles, active, showEmails } = await load();
   const ownerLabel = owner ? label(profiles, owner) : null;
   if (tabId !== undefined) {
@@ -12,6 +12,7 @@ async function present({ owner, checked = [], diagnostics = [] }, tabId) {
   }
   return {
     owner: ownerLabel,
+    invited,
     active: active ? label(profiles, active) : null,
     checked: checked.map((k) => label(profiles, k)),
     showEmails,

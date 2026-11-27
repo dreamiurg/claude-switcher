@@ -28,7 +28,7 @@ Don't use claude.ai's **Log out** on a saved account. It ends that session on An
 
 ## Links from your other account
 
-Open an artifact that belongs to one of your other accounts and claude.ai shows "Page not found". The extension checks your saved accounts and offers to open it in the right one.
+Open an artifact that belongs to one of your other accounts and claude.ai shows "Page not found". The extension checks your saved accounts and offers to open it in the right one. If someone shared it with one of your other accounts and you haven't accepted yet, it offers that account, where claude.ai shows the invitation.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/card-dark.png">

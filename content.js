@@ -79,7 +79,13 @@
 
   function foundCard(r) {
     const t = el("div", "t");
-    t.append(el("strong", "", `This artifact is in ${r.owner.name}`));
+    t.append(
+      el(
+        "strong",
+        "",
+        r.invited ? `${r.owner.name} has an invitation to this artifact` : `This artifact is in ${r.owner.name}`,
+      ),
+    );
     if (r.showEmails && r.owner.email && r.owner.email !== r.owner.name) t.append(el("span", "", r.owner.email));
     if (r.active) t.append(el("span", "", `You're on ${r.active.name}`));
     const go = el("button", "go", "Open there");
@@ -148,19 +154,33 @@
     return last;
   }
 
+  // Whether this account has a pending invitation to the artifact, asked the way claude.ai's page does
+  // (it needs ?org=, so each of the account's organizations is tried).
+  async function invited(prefix, orgs) {
+    for (const org of orgs) {
+      const r = await fetch(`${prefix}&org=${encodeURIComponent(org)}`, {
+        credentials: "omit",
+        cache: "no-store",
+        headers: FRAME_HEADERS,
+      });
+      if (r.ok && typeof json(await r.text())?.inviteId === "string") return true;
+    }
+    return false;
+  }
+
+  async function check(p) {
+    const frame = await frameStatus(p.prefix, p.orgs || []).catch((e) => ({ status: 0, body: String(e) }));
+    const inv = frame.status !== 200 && (await invited(p.invitePrefix, p.orgs || []).catch(() => false));
+    return { key: p.key, ruleIds: p.ruleIds, invited: inv, ...frame };
+  }
+
   async function probe(artifactId) {
     const t = el("div", "t");
     t.append(el("strong", "", "Checking your other accounts…"));
     show(el("div", "spin"), t);
     let r = await send({ type: "prepare", artifactId });
     if (r?.probes) {
-      const results = await Promise.all(
-        r.probes.map(async (p) => ({
-          key: p.key,
-          ruleId: p.ruleId,
-          ...(await frameStatus(p.prefix, p.orgs || []).catch((e) => ({ status: 0, body: String(e) }))),
-        })),
-      );
+      const results = await Promise.all(r.probes.map(check));
       r = await send({ type: "finish", artifactId, results });
     }
     if (location.pathname !== seenPath) return;
